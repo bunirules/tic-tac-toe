@@ -1,34 +1,44 @@
-import random
 import numpy as np
+import pandas as pd
 
 
 #### Define the quadratic and cross-entropy cost functions
 
-def loss(z, v, pi, p, c, theta):
-    """Loss function to minimise to learn the neural network parameters.
+class Cost:
 
-    Arguments:
-        z -- game outcome of a game of self-play
-        v -- estimate of z from a position s (output of neural network from position s)
-        pi -- numpy vector of search probabilities from MCTS
-        p -- numpy vector of move probabilities (output of neural network from position s)
-        c -- hyper-parameter controlling level of l2 weight regularisation
-        theta -- numpy vector containing the parameters of neural network
+    @staticmethod
+    def loss(z, v, pi, p, lmbda, theta):
+        """Loss function to minimise to learn the neural network parameters.
 
-    Returns:
-        loss to be minimised
-    """
-    return (z - v)**2 - pi*np.log(p) + c*np.sum(theta**2)
+        Arguments:
+            z -- game outcome of a game of self-play
+            v -- estimate of z from a position s (output of neural network from position s)
+            pi -- numpy vector of search probabilities from MCTS
+            p -- numpy vector of move probabilities (output of neural network from position s)
+            c -- hyper-parameter controlling level of l2 weight regularisation
+            theta -- numpy vector containing the parameters of neural network
 
-def vectorized_result(j):
-    """Return a 10-dimensional unit vector with a 1.0 in the j'th position
-    and zeroes elsewhere.  This is used to convert a digit (0...9)
-    into a corresponding desired output from the neural network.
+        Returns:
+            loss to be minimised
+        """
+        return (z - v)**2 - pi*np.log(p) + lmbda*np.sum(theta**2)
 
-    """
-    e = np.zeros((10, 1))
-    e[j] = 1.0
-    return e
+    @staticmethod
+    def delta(a, y):
+        """return the delta for backpropogation
+
+        Arguments:
+            a -- output from network, contains vector p and evaluation v
+            y -- target for network, output from mcts, contains vector pi and game outcome z
+
+        Returns:
+            _description_
+        """
+        p, v = a[:-1], a[-1]
+        pi, z = y[:-1], y[-1]
+        out = pi*(1 - p)
+        output = np.append(out, 2*(v-z)*v*(1-v), axis = 0)
+        return output
 
 def sigmoid(z):
     """The sigmoid function."""
@@ -40,9 +50,9 @@ def sigmoid_prime(z):
 
 
 #### Main Network class
-class Network(object):
+class Network:
 
-    def __init__(self, sizes, cost=CrossEntropyCost):
+    def __init__(self, sizes, cost=Cost):
         """The list ``sizes`` contains the number of neurons in the respective
         layers of the network.  For example, if the list was [2, 3, 1]
         then it would be a three-layer network, with the first layer
@@ -55,10 +65,10 @@ class Network(object):
         """
         self.num_layers = len(sizes)
         self.sizes = sizes
-        self.initialise_weights()
-        self.cost=cost
+        self.load_params()
+        self.cost = cost
 
-    def initialise_weights(self):
+    def load_params(self):
         """Initialize each weight using a Gaussian distribution with mean 0
         and standard deviation 1 over the square root of the number of
         weights connecting to the same neuron.  Initialize the biases
@@ -71,77 +81,40 @@ class Network(object):
         layers.
 
         """
-        self.biases = [np.random.randn(y, 1) for y in self.sizes[1:]]
-        self.weights = [np.random.randn(y, x)/np.sqrt(x)
+        try:
+            df = pd.read_csv("network_params.csv", header=None)
+            ind = df.shape[0]
+            w = np.array(df.loc[ind-2])
+            b = np.array(df.loc[ind-1])
+            weights = w[np.logical_not(np.isnan(w))]
+            biases = b[np.logical_not(np.isnan(b))]
+            count = 0
+            temp_b = []
+            for y in self.sizes[1:]:
+                temp_b.append(np.array(biases[count:count+y]).reshape([y,1]))
+                count += y
+            count = 0
+            temp_w = []
+            for x, y in zip(self.sizes[:-1], self.sizes[1:]):
+                temp_w.append(np.array(weights[count:count+x*y]).reshape([y,x]))
+                count += x*y
+            self.biases = temp_b
+            self.weights = temp_w
+        except pd.errors.EmptyDataError:
+            self.biases = [np.random.randn(y, 1) for y in self.sizes[1:]]
+            self.weights = [np.random.randn(y, x)/np.sqrt(x) 
                         for x, y in zip(self.sizes[:-1], self.sizes[1:])]
 
-    def feedforward(self, a):
-        """Return the output of the network if ``a`` is input."""
+    def predict(self, s):
+        """Return the output of the network if ``s`` is input."""
         for b, w in zip(self.biases, self.weights):
-            a = sigmoid(np.dot(w, a)+b)
-        return a
 
-    def SGD(self, training_data, epochs, mini_batch_size, eta,
-            lmbda = 0.0,
-            evaluation_data=None,
-            monitor_evaluation_cost=False,
-            monitor_evaluation_accuracy=False,
-            monitor_training_cost=False,
-            monitor_training_accuracy=False):
-        """Train the neural network using mini-batch stochastic gradient
-        descent.  The ``training_data`` is a list of tuples ``(x, y)``
-        representing the training inputs and the desired outputs.  The
-        other non-optional parameters are self-explanatory, as is the
-        regularization parameter ``lmbda``.  The method also accepts
-        ``evaluation_data``, usually either the validation or test
-        data.  We can monitor the cost and accuracy on either the
-        evaluation data or the training data, by setting the
-        appropriate flags.  The method returns a tuple containing four
-        lists: the (per-epoch) costs on the evaluation data, the
-        accuracies on the evaluation data, the costs on the training
-        data, and the accuracies on the training data.  All values are
-        evaluated at the end of each training epoch.  So, for example,
-        if we train for 30 epochs, then the first element of the tuple
-        will be a 30-element list containing the cost on the
-        evaluation data at the end of each epoch. Note that the lists
-        are empty if the corresponding flag is not set.
+            s = sigmoid(np.dot(w, s)+b.flatten())
+        p = s[:-1]
+        v = s[-1]
+        return p, v
 
-        """
-        if evaluation_data: n_data = len(evaluation_data)
-        n = len(training_data)
-        evaluation_cost, evaluation_accuracy = [], []
-        training_cost, training_accuracy = [], []
-        for j in range(epochs):
-            random.shuffle(training_data)
-            mini_batches = [
-                training_data[k:k+mini_batch_size]
-                for k in range(0, n, mini_batch_size)]
-            for mini_batch in mini_batches:
-                self.update_mini_batch(
-                    mini_batch, eta, lmbda, len(training_data))
-            print("Epoch %s training complete:", j)
-            if monitor_training_cost:
-                cost = self.total_cost(training_data, lmbda)
-                training_cost.append(cost)
-                print(f"Cost on training data: {cost}")
-            if monitor_training_accuracy:
-                accuracy = self.accuracy(training_data, convert=True)
-                training_accuracy.append(accuracy)
-                print(f"Accuracy on training data: {accuracy} / {n}")
-            if monitor_evaluation_cost:
-                cost = self.total_cost(evaluation_data, lmbda, convert=True)
-                evaluation_cost.append(cost)
-                print(f"Cost on evaluation data: {cost}")
-            if monitor_evaluation_accuracy:
-                accuracy = self.accuracy(evaluation_data)
-                evaluation_accuracy.append(accuracy)
-                print(f"Accuracy on evaluation data: {self.accuracy(evaluation_data)} / {n_data}")
-            print
-        return evaluation_cost, evaluation_accuracy, \
-            training_cost, training_accuracy
-
-    # i think just delete SGD and use u_m_b as func to train on new game data
-    def update_mini_batch(self, mini_batch, eta, lmbda, n):
+    def train_new_data(self, examples, eta, lmbda): #, n):
         """Update the network's weights and biases by applying gradient
         descent using backpropagation to a single mini batch.  The
         ``mini_batch`` is a list of tuples ``(x, y)``, ``eta`` is the
@@ -151,15 +124,18 @@ class Network(object):
         """
         nabla_b = [np.zeros(b.shape) for b in self.biases]
         nabla_w = [np.zeros(w.shape) for w in self.weights]
-        for x, y in mini_batch:
+        print(len(examples))
+        print(len(examples[0]))
+        for x, y in examples:
             delta_nabla_b, delta_nabla_w = self.backprop(x, y)
             nabla_b = [nb+dnb for nb, dnb in zip(nabla_b, delta_nabla_b)]
             nabla_w = [nw+dnw for nw, dnw in zip(nabla_w, delta_nabla_w)]
-        self.weights = [(1-eta*(lmbda/n))*w-(eta/len(mini_batch))*nw
+        self.weights = [(1-eta*(lmbda))*w-(eta/len(examples))*nw # lmbda/n
                         for w, nw in zip(self.weights, nabla_w)]
-        self.biases = [b-(eta/len(mini_batch))*nb
+        self.biases = [b-(eta/len(examples))*nb
                        for b, nb in zip(self.biases, nabla_b)]
 
+    # something weird about x and y here
     def backprop(self, x, y):
         """Return a tuple ``(nabla_b, nabla_w)`` representing the
         gradient for the cost function C_x.  ``nabla_b`` and
@@ -177,7 +153,7 @@ class Network(object):
             activation = sigmoid(z)
             activations.append(activation)
         # backward pass
-        delta = (self.cost).delta(zs[-1], activations[-1], y)
+        delta = (self.cost).delta(activations[-1], y)
         nabla_b[-1] = delta
         nabla_w[-1] = np.dot(delta, activations[-2].transpose())
         # Note that the variable l in the loop below is used a little
@@ -194,50 +170,9 @@ class Network(object):
             nabla_w[-l] = np.dot(delta, activations[-l-1].transpose())
         return (nabla_b, nabla_w)
 
-    def accuracy(self, data, convert=False):
-        """Return the number of inputs in ``data`` for which the neural
-        network outputs the correct result. The neural network's
-        output is assumed to be the index of whichever neuron in the
-        final layer has the highest activation.
-
-        The flag ``convert`` should be set to False if the data set is
-        validation or test data (the usual case), and to True if the
-        data set is the training data. The need for this flag arises
-        due to differences in the way the results ``y`` are
-        represented in the different data sets.  In particular, it
-        flags whether we need to convert between the different
-        representations.  It may seem strange to use different
-        representations for the different data sets.  Why not use the
-        same representation for all three data sets?  It's done for
-        efficiency reasons -- the program usually evaluates the cost
-        on the training data and the accuracy on other data sets.
-        These are different types of computations, and using different
-        representations speeds things up.  More details on the
-        representations can be found in
-        mnist_loader.load_data_wrapper.
-
-        """
-        if convert:
-            results = [(np.argmax(self.feedforward(x)), np.argmax(y))
-                       for (x, y) in data]
-        else:
-            results = [(np.argmax(self.feedforward(x)), y)
-                        for (x, y) in data]
-        return sum(int(x == y) for (x, y) in results)
-
-    def total_cost(self, data, lmbda, convert=False):
-        """Return the total cost for the data set ``data``.  The flag
-        ``convert`` should be set to False if the data set is the
-        training data (the usual case), and to True if the data set is
-        the validation or test data.  See comments on the similar (but
-        reversed) convention for the ``accuracy`` method, above.
-        """
-        cost = 0.0
-        for x, y in data:
-            a = self.feedforward(x)
-            if convert: y = vectorized_result(y)
-            cost += self.cost.fn(a, y)/len(data)
-        cost += 0.5*(lmbda/len(data))*sum(
-            np.linalg.norm(w)**2 for w in self.weights)
-        return cost
-
+    def save_network_params(self):
+        w = np.array(self.weights).flatten()
+        b = np.array(self.biases).flatten()
+        params = [list(w), list(b)]
+        df = pd.DataFrame(params)
+        df.to_csv("network_params.csv", mode="a", index=False, header=False)
