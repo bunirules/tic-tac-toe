@@ -36,8 +36,10 @@ class Cost:
         """
         p, v = a[:-1], a[-1]
         pi, z = y[:-1], y[-1]
+        # print("pi: ", pi)
+        # print("p: ", p)
         out = pi*(1 - p)
-        output = np.append(out, 2*(v-z)*v*(1-v), axis = 0)
+        output = np.append(out, 2*(v-z)*v*(1-v))
         return output
 
 def sigmoid(z):
@@ -52,7 +54,7 @@ def sigmoid_prime(z):
 #### Main Network class
 class Network:
 
-    def __init__(self, sizes, cost=Cost):
+    def __init__(self, sizes, cost=Cost, load=False):
         """The list ``sizes`` contains the number of neurons in the respective
         layers of the network.  For example, if the list was [2, 3, 1]
         then it would be a three-layer network, with the first layer
@@ -65,10 +67,10 @@ class Network:
         """
         self.num_layers = len(sizes)
         self.sizes = sizes
-        self.load_params()
+        self.load_params(load)
         self.cost = cost
 
-    def load_params(self):
+    def load_params(self, load):
         """Initialize each weight using a Gaussian distribution with mean 0
         and standard deviation 1 over the square root of the number of
         weights connecting to the same neuron.  Initialize the biases
@@ -82,28 +84,30 @@ class Network:
 
         """
         try:
-            df = pd.read_csv("network_params.csv", header=None)
-            ind = df.shape[0]
-            w = np.array(df.loc[ind-2])
-            b = np.array(df.loc[ind-1])
-            weights = w[np.logical_not(np.isnan(w))]
-            biases = b[np.logical_not(np.isnan(b))]
-            count = 0
-            temp_b = []
-            for y in self.sizes[1:]:
-                temp_b.append(np.array(biases[count:count+y]).reshape([y,1]))
-                count += y
-            count = 0
-            temp_w = []
-            for x, y in zip(self.sizes[:-1], self.sizes[1:]):
-                temp_w.append(np.array(weights[count:count+x*y]).reshape([y,x]))
-                count += x*y
-            self.biases = temp_b
-            self.weights = temp_w
+            if load:
+                df = pd.read_csv("network_params.csv", header=None)
+                ind = df.shape[0]
+                w = np.array(df.loc[ind-2])
+                b = np.array(df.loc[ind-1])
+                weights = w[np.logical_not(np.isnan(w))]
+                biases = b[np.logical_not(np.isnan(b))]
+                count = 0
+                temp_b = []
+                for y in self.sizes[1:]:
+                    temp_b.append(np.array(biases[count:count+y]).reshape([y]))
+                    count += y
+                count = 0
+                temp_w = []
+                for x, y in zip(self.sizes[:-1], self.sizes[1:]):
+                    temp_w.append(np.array(weights[count:count+x*y]).reshape([y,x]))
+                    count += x*y
+                self.biases = temp_b
+                self.weights = temp_w
         except pd.errors.EmptyDataError:
-            self.biases = [np.random.randn(y, 1) for y in self.sizes[1:]]
-            self.weights = [np.random.randn(y, x)/np.sqrt(x) 
-                        for x, y in zip(self.sizes[:-1], self.sizes[1:])]
+            pass
+        self.biases = [np.random.randn(y) for y in self.sizes[1:]]
+        self.weights = [np.random.randn(y, x)/np.sqrt(x) 
+                    for x, y in zip(self.sizes[:-1], self.sizes[1:])]
 
     def predict(self, s):
         """Return the output of the network if ``s`` is input."""
@@ -114,26 +118,33 @@ class Network:
         v = s[-1]
         return p, v
 
-    def train_new_data(self, examples, eta, lmbda): #, n):
+    def train_new_data(self, examples, eta, lmbda, n):
         """Update the network's weights and biases by applying gradient
         descent using backpropagation to a single mini batch.  The
-        ``mini_batch`` is a list of tuples ``(x, y)``, ``eta`` is the
+        ``mini_batch`` is a list of tuples ``(s, y)``, ``eta`` is the
         learning rate, ``lmbda`` is the regularization parameter, and
         ``n`` is the total size of the training data set.
 
         """
         nabla_b = [np.zeros(b.shape) for b in self.biases]
         nabla_w = [np.zeros(w.shape) for w in self.weights]
-        print(len(examples))
-        print(len(examples[0]))
-        for x, y in examples:
-            delta_nabla_b, delta_nabla_w = self.backprop(x, y)
+
+        for example in examples:
+            delta_nabla_b, delta_nabla_w = self.backprop(example[0], example[1])
+            # for nb, dnb in zip(nabla_b, delta_nabla_b):
+            #     print(f"nb: {nb},\n dnb: {dnb}")
             nabla_b = [nb+dnb for nb, dnb in zip(nabla_b, delta_nabla_b)]
             nabla_w = [nw+dnw for nw, dnw in zip(nabla_w, delta_nabla_w)]
-        self.weights = [(1-eta*(lmbda))*w-(eta/len(examples))*nw # lmbda/n
+        self.weights = [(1-eta*(lmbda/n))*w-(eta/len(examples))*nw # lmbda/n
                         for w, nw in zip(self.weights, nabla_w)]
+        # print("im here aksfazlkrgnszrf")
+        # for b, nb in zip(self.biases, nabla_b):
+        #     print(f"b: {b},\n nb: {nb}")
+        # print("1, ",self.biases)
         self.biases = [b-(eta/len(examples))*nb
                        for b, nb in zip(self.biases, nabla_b)]
+        # print(type(zip(self.biases, nabla_b)))
+        # print("2, ",self.biases)
 
     # something weird about x and y here
     def backprop(self, x, y):
@@ -144,18 +155,26 @@ class Network:
         nabla_b = [np.zeros(b.shape) for b in self.biases]
         nabla_w = [np.zeros(w.shape) for w in self.weights]
         # feedforward
+        # print("x: ", x)
+        # print("y: ", y)
         activation = x
         activations = [x] # list to store all the activations, layer by layer
         zs = [] # list to store all the z vectors, layer by layer
         for b, w in zip(self.biases, self.weights):
-            z = np.dot(w, activation)+b
+            # print("b: ", b.shape)
+            # print(self.biases)
+            # print("w: ", w.shape)
+            # print("act: ", activation.shape)
+            z = np.dot(w, activation)+b.flatten()
             zs.append(z)
             activation = sigmoid(z)
             activations.append(activation)
         # backward pass
+        # print("act: ", activations[-1])
         delta = (self.cost).delta(activations[-1], y)
         nabla_b[-1] = delta
-        nabla_w[-1] = np.dot(delta, activations[-2].transpose())
+        nabla_w[-1] = np.outer(delta, activations[-2])
+        # print("hello: ",nabla_w[-1].shape)
         # Note that the variable l in the loop below is used a little
         # differently to the notation in Chapter 2 of the book.  Here,
         # l = 1 means the last layer of neurons, l = 2 is the
@@ -166,13 +185,19 @@ class Network:
             z = zs[-l]
             sp = sigmoid_prime(z)
             delta = np.dot(self.weights[-l+1].transpose(), delta) * sp
+            # print("1234: ", delta.shape)
             nabla_b[-l] = delta
-            nabla_w[-l] = np.dot(delta, activations[-l-1].transpose())
+            nabla_w[-l] = np.outer(delta, activations[-l-1])
+            # print("5678: ",nabla_b)
         return (nabla_b, nabla_w)
 
     def save_network_params(self):
-        w = np.array(self.weights).flatten()
-        b = np.array(self.biases).flatten()
+        w = self.weights[0]
+        for i in range(1, len(self.weights)):
+            w = np.append(w, self.weights[i])
+        b = self.biases[0]
+        for i in range(1, len(self.biases)):
+            b = np.append(b, self.biases[i])
         params = [list(w), list(b)]
         df = pd.DataFrame(params)
         df.to_csv("network_params.csv", mode="a", index=False, header=False)
