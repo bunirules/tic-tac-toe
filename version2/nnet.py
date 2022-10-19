@@ -84,6 +84,8 @@ class Network:
 
         """
         try:
+            if not load:
+                raise pd.errors.EmptyDataError
             if load:
                 df = pd.read_csv("network_params.csv", header=None)
                 ind = df.shape[0]
@@ -104,9 +106,8 @@ class Network:
                 self.biases = temp_b
                 self.weights = temp_w
         except pd.errors.EmptyDataError:
-            pass
-        self.biases = [np.random.randn(y) for y in self.sizes[1:]]
-        self.weights = [np.random.randn(y, x)/np.sqrt(x) 
+            self.biases = [np.random.randn(y) for y in self.sizes[1:]]
+            self.weights = [np.random.randn(y, x)/np.sqrt(x) 
                     for x, y in zip(self.sizes[:-1], self.sizes[1:])]
 
     def predict(self, s):

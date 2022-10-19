@@ -24,6 +24,10 @@ class Game:
             return False
 
     def game_rewards(self, s):
+        if not self.game_ended(s):
+            print("Game not ended")
+            raise ValueError
+        out = None
         if self.player == "X":
             mult = 1
         elif self.player == "O":
@@ -35,7 +39,9 @@ class Game:
         for col in board.T:
             if sum(col) == 3:
                 out = 1
-        if s[0] + s[4] + s[8] == 3:
+        if out == 1:
+            out = 1
+        elif s[0] + s[4] + s[8] == 3:
             out = 1
         elif s[2] + s[4] + s[6] == 3:
             out = 1

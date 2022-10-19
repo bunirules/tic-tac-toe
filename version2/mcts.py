@@ -16,12 +16,12 @@ class MCTS:
             self.Q.append([0,0,0,0,0,0,0,0,0])
             self.N.append([0,0,0,0,0,0,0,0,0])
             new_p, v = net.predict(np.array(s))
-            self.P.append(new_p)
+            self.P.append(new_p/np.sum(new_p))
             return -v
         i = self.visited.index(list(s))
         u_max, best_a = -2, -2
         for a in game.get_valid_actions(s):
-            u = self.Q[i][a] + c_puct*self.P[i][a]*(sum(self.N[i])/(1+self.N[i][a]))**0.5
+            u = self.Q[i][a] + c_puct*self.P[i][a]*((sum(self.N[i])/(1+self.N[i][a]))**0.5)
             if u > u_max:
                 u_max = u
                 best_a = a
