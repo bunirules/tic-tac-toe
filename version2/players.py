@@ -2,19 +2,27 @@ import numpy as np
 from game import Game
 
 def op_player(s):
+    # move 1
     if list(s) == [0,0,0,0,0,0,0,0,0]:
         return 4
+    # move 2
     if list(s) == [1,0,0,0,0,0,0,0,0] or list(s) == [0,0,1,0,0,0,0,0,0] or list(s) == [0,0,0,0,0,0,1,0,0] or list(s) == [0,0,0,0,0,0,0,0,1]:
         return 4
     elif list(s) == [0,1,0,0,0,0,0,0,0] or list(s) == [0,0,0,1,0,0,0,0,0] or list(s) == [0,0,0,0,0,1,0,0,0] or list(s) == [0,0,0,0,0,0,0,1,0]:
         return 4
     elif list(s) == [0,0,0,0,1,0,0,0,0]:
         return 0
+    # move 3
     if list(s) == [0,-1,0,0,1,0,0,0,0] or list(s) == [0,0,0,-1,1,0,0,0,0] or list(s) == [0,0,0,0,1,-1,0,0,0] or list(s) == [0,0,0,0,1,0,0,-1,0]:
         return 0
     elif list(s) == [0,0,-1,0,1,0,0,0,0] or list(s) == [0,0,0,0,1,0,-1,0,0] or list(s) == [0,0,0,0,1,0,0,0,-1]:
         return 0
     elif list(s) == [-1,0,0,0,1,0,0,0,0]:
+        return 2
+    # move 4
+    if list(s) == [1,0,0,0,-1,0,0,0,1] or list(s) == [0,0,1,0,-1,0,1,0,0]:
+        return 1
+    elif list(s) == [-1,0,0,0,1,0,0,0,1]:
         return 2
 
     board = [list(a) for a in s.reshape([3,3])]
