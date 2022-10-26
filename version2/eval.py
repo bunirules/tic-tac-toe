@@ -4,15 +4,21 @@ from mcts import MCTS
 import players
 import numpy as np
 
-def play_OP(net, search_sims, c_puct):
-    # i = np.random.choice([0,1])
-    p_ai = "X" # ["X", "O"][i]
-    player = "O" # ["X", "O"][1-i]
+def play_OP(net, search_sims, c_puct, game_num):
+    choice = np.random.choice(range(100))
+    show = False
+    if choice == 4:
+        show = True
+    i = np.random.choice([-1,1])
+    p_ai =  i
+    player =  -i
 
     game = Game()
     s = game.get_initial_state(player=p_ai)
-
-    current_player = "X"
+    if show:
+        print(f"Showing Game number {game_num}, ai is player {p_ai}")
+        print(s)
+    current_player = 1
 
     mcts = MCTS()
 
@@ -26,22 +32,21 @@ def play_OP(net, search_sims, c_puct):
             pi = mcts.pi(s)
             move = np.random.choice(len(pi), p=pi)
             s = game.next_state(s, move)
+        current_player *= -1
+        if show:
+            print(s)
         if game.game_ended(s):
-            return game.game_rewards(s)
-        if current_player == "X":
-            current_player = "O"
-        else:
-            current_player = "X"
+            return game.game_rewards(s, current_player)
 
 def play_rand(net, search_sims, c_puct):
-    i = np.random.choice([0,1])
-    p_ai = ["X", "O"][i]
-    player = ["X", "O"][1-i]
+    i = np.random.choice([-1,1])
+    p_ai = i
+    player = -i
 
     game = Game()
     s = game.get_initial_state(player=p_ai)
 
-    current_player = "X"
+    current_player = 1
 
     mcts = MCTS()
 
@@ -57,19 +62,16 @@ def play_rand(net, search_sims, c_puct):
             s = game.next_state(s, move)
         if game.game_ended(s):
             return game.game_rewards(s)
-        if current_player == "X":
-            current_player = "O"
-        else:
-            current_player = "X"
+        current_player *= -1
 
 
 def eval(search_sims, c_puct, eval_games, eta, lmbda, net=None):
     if net is None:
-        net = Network([9,10,10,10,10], load=True)
+        net = Network([9,10,10,10,10,10], load=True)
     vsOP = []
     # vsRand = []
-    for _ in range(eval_games):
-        vsOP.append(play_OP(net, search_sims, c_puct))
+    for i in range(eval_games):
+        vsOP.append(play_OP(net, search_sims, c_puct, i))
         # vsRand.append(play_rand(net, search_sims, c_puct))
     print(f"Wins: {vsOP.count(1)}, Draws: {vsOP.count(0)}, Losses: {vsOP.count(-1)} vsOP, eta: {eta}, lmbda: {lmbda}, c_puct: {c_puct}")
     # print(f"Wins: {vsRand.count(1)}, Draws: {vsRand.count(0)}, Losses: {vsRand.count(-1)} vsRand, eta: {eta}, lmbda: {lmbda}, c_puct: {c_puct}")

@@ -23,15 +23,13 @@ class Game:
         else:
             return False
 
-    def game_rewards(self, s):
+    def game_rewards(self, s, player):
+        if player not in [1, -1]:
+            print(f"Invalid value for player: {player}")
         if not self.game_ended(s):
             print("Game not ended")
             raise ValueError
         out = None
-        if self.player == "X":
-            mult = 1
-        elif self.player == "O":
-            mult = -1
         board = s.reshape([3,3])
         for row in board:
             if sum(row) == 3:
@@ -49,7 +47,7 @@ class Game:
             out = 0
         else:
             out = -1
-        return out*mult
+        return out*player
 
     @staticmethod
     def get_valid_actions(s):

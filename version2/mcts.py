@@ -10,7 +10,7 @@ class MCTS:
     def search(self, s, game, net, c_puct):
         s = tuple(s)
         if game.game_ended(np.array(s)):
-            return -game.game_rewards(np.array(s))
+            return -game.game_rewards(np.array(s), 1)
         if list(s) not in self.visited:
             self.visited.append(list(s))
             self.Q.append([0,0,0,0,0,0,0,0,0])
